@@ -1,11 +1,9 @@
 ---
 
 # **Sign Language Recognition with LSTM**
-
-- **[Real-Time Sign Language Recognition](https://github.com/Uni-Creator/Real-Time-Sign-Language-Recognition)**  
-  ![GitHub Repo stars](https://img.shields.io/github/stars/Uni-Creator/Real-Time-Sign-Language-Recognition?style=social)  
-  ![GitHub forks](https://img.shields.io/github/forks/Uni-Creator/Real-Time-Sign-Language-Recognition?style=social)  
-  An LSTM-based model for recognizing sign language gestures using PyTorch. 🖐️
+![GitHub Repo stars](https://img.shields.io/github/stars/Uni-Creator/Real-Time-Sign-Language-Recognition?style=social)  
+![GitHub forks](https://img.shields.io/github/forks/Uni-Creator/Real-Time-Sign-Language-Recognition?style=social)  
+An LSTM-based model for recognizing sign language gestures using PyTorch. 🖐️
 
 
 ## **Description**
