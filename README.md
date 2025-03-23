@@ -2,6 +2,12 @@
 
 # **Sign Language Recognition with LSTM**
 
+- **[Real-Time Sign Language Recognition](https://github.com/Uni-Creator/Real-Time-Sign-Language-Recognition)**  
+  ![GitHub Repo stars](https://img.shields.io/github/stars/Uni-Creator/Real-Time-Sign-Language-Recognition?style=social)  
+  ![GitHub forks](https://img.shields.io/github/forks/Uni-Creator/Real-Time-Sign-Language-Recognition?style=social)  
+  An LSTM-based model for recognizing sign language gestures using PyTorch. 🖐️
+
+
 ## **Description**
 
 This project implements a Long Short-Term Memory (LSTM) neural network to classify sequences of sign language gestures. The system is trained on a dataset containing sequences of hand gesture frames for different actions in American Sign Language (ASL), such as 'nothing', 'hello', 'thanks', and 'I love you'. The model is designed to recognize these gestures from input sequences and classify them accurately into their respective categories.
