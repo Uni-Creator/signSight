@@ -1,3 +1,4 @@
+
 ---
 
 # **Sign Language Recognition with LSTM**
@@ -103,7 +104,13 @@ After training, the model will evaluate the performance on the test set. The con
 
 ---
 
-# **Contributing**
+# **Contributors**
+<a href="https://github.com/Uni-Creator/Real-Time-Sign-Language-Recognition/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Uni-Creator/Real-Time-Sign-Language-Recognition" />
+</a>
+
+
+## **Contributing**
 
 Contributions are welcome! If you want to contribute to this project, please follow these steps:
 
@@ -112,6 +119,7 @@ Contributions are welcome! If you want to contribute to this project, please fol
 3. Commit your changes.
 4. Push to the branch.
 5. Open a pull request.
+
 
 ---
 
