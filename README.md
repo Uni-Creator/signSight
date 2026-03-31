@@ -1,118 +1,157 @@
+# signSight
+
+![GitHub Repo stars](https://img.shields.io/github/stars/Uni-Creator/signSight?style=social) ![GitHub forks](https://img.shields.io/github/forks/Uni-Creator/signSight?style=social)
+
+A real-time Indian Sign Language (ISL) recognition system powered by a Swin3D + BiLSTM deep learning pipeline, served via a Flask API and paired with a Flutter mobile app. 🖐️
 
 ---
 
-# **Sign Language Recognition with LSTM**
-![GitHub Repo stars](https://img.shields.io/github/stars/Uni-Creator/Real-Time-Sign-Language-Recognition?style=social)  ![GitHub forks](https://img.shields.io/github/forks/Uni-Creator/Real-Time-Sign-Language-Recognition?style=social)  
-An LSTM-based model for recognizing sign language gestures using PyTorch. 🖐️
+## Description
 
+**signSight** is an end-to-end ISL recognition system that processes video input, extracts spatial-temporal features, and classifies sign gestures in real time. The system is designed for accessibility — enabling communication for the hearing-impaired by translating ISL gestures into readable text, with optional text-to-speech output on the mobile frontend.
 
-## **Description**
+### Project Overview
 
-This project implements a Long Short-Term Memory (LSTM) neural network to classify sequences of sign language gestures. The system is trained on a dataset containing sequences of hand gesture frames for different actions in American Sign Language (ASL), such as 'nothing', 'hello', 'thanks', and 'I love you'. The model is designed to recognize these gestures from input sequences and classify them accurately into their respective categories.
+The pipeline is organized into three layers:
 
-### **Project Overview**
+1. **Model** (`model/`): A Swin3D-S backbone combined with a BiLSTM head processes sequences of video frames to extract and classify ISL gestures. Model checkpoints and training datasets are stored here.
 
-The project pipeline is as follows:
+2. **Backend** (`backend/`): A Flask server exposes a REST/WebSocket API (using `flask-sock`) for real-time inference. It uses MediaPipe for hand landmark extraction, OpenCV for frame capture and preprocessing, and PyTorch + JAX for model inference.
 
-1. **Data Preparation**: The input data consists of a sequence of frames, with each frame represented as a numpy array of key points (features). These sequences are pre-processed and stored in a folder structure where each action category contains multiple gesture sequences.
-   
-2. **Model Architecture**: The model is built using PyTorch and consists of three LSTM layers followed by fully connected (dense) layers. The LSTM layers are designed to capture temporal dependencies in the gesture sequences. The final classification is performed using a softmax activation function to output probabilities for each gesture class.
-   
-3. **Training and Evaluation**: The model is trained using the Adam optimizer and cross-entropy loss. Training is performed with early stopping to prevent overfitting, and the best model is saved. The performance of the model is evaluated using a confusion matrix and class-wise probabilities on the test set.
-
-4. **GPU Support**: The model is optimized to run on a GPU (if available) for faster computation. This is handled using PyTorch's `torch.device`.
-
-5. **Visualization**: A confusion matrix is generated at the end of the training process to visualize the performance of the model, showing the predicted versus actual gesture categories.
+3. **Frontend** (`frontend/`): A Flutter Android/iOS app that streams camera input to the backend, displays recognized gestures in real time, and reads them aloud via `flutter_tts`.
 
 ---
 
-## **Technologies Used**
-- **Python**: For model implementation and data handling. ( Python 3.10 )
-- **PyTorch**: Used for building and training the LSTM model.
-- **Numpy**: For data manipulation and sequence loading.
-- **Matplotlib & Seaborn**: For plotting and visualizing the confusion matrix.
-- **Sklearn**: For train/test data splitting and evaluation metrics.
+## Technologies Used
+
+- **Python 3.10** — Backend, model training, and inference
+- **PyTorch / JAX** — Model training and inference
+- **Swin3D + BiLSTM** — Spatial-temporal feature extraction and sequence modeling
+- **MediaPipe** — Hand landmark detection
+- **OpenCV** — Frame capture and preprocessing
+- **Flask + flask-sock** — REST and WebSocket API server
+- **Flutter (Dart)** — Cross-platform mobile frontend
+- **firebase / Pyrebase4** — Authentication and data sync
+- **NumPy / SciPy / Matplotlib** — Data processing and visualization
 
 ---
 
-# **Project Files Structure**
+## Project Structure
+
 ```plaintext
 .
-├── Data/                           # Directory containing gesture sequences for each action
-│   ├── hello/                      # Folder for "hello" action sequences
-│   ├── iloveyou/                   # Folder for "I love you" action sequences
-│   ├── nothing/                    # Folder for "nothing" action sequences
-│   └── thanks/                     # Folder for "thanks" action sequences
-├── best_lstm_model.h5              # Saved model with the best validation accuracy
-├── main.py                         # Main script for  evaluating the model
-├── trainer.py                      # Script for training the model
-├── dataCollection.py               # Script for creating data
-├── README.md                       # Project readme file
-└── requirements.txt                # Python dependencies required for the project
+├── backend/                        # Flask API server + Python environment
+│   ├── saved_captures/             # Saved gesture video captures
+│   └── Lib/site-packages/          # Virtual environment dependencies
+│
+├── frontend/                       # Flutter mobile application
+│   ├── lib/
+│   │   ├── providers/              # State management
+│   │   ├── screens/                # UI screens
+│   │   └── services/               # API communication services
+│   ├── assets/                     # Static assets (icons, images)
+│   ├── android/                    # Android build configuration
+│   └── ios/                        # iOS build configuration
+│
+└── model/
+    ├── checkpoints/                # Saved model weights
+    └── dataset/                    # ISL gesture training data
 ```
 
 ---
 
-# **Setup Instructions**
+## Setup Instructions
 
-### **Installation**
+### Prerequisites
+
+- Python 3.10
+- Flutter SDK (≥ 3.x)
+- Android Studio or Xcode (for mobile deployment)
+- CUDA-compatible GPU (recommended for training)
+
+### Backend Setup
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/Uni-Creator/Real-Time-Sign-Language-Recognition.git
-   cd Real-Time-Sign-Language-Recognition
+   git clone https://github.com/Uni-Creator/signSight.git
+   cd signSight
    ```
 
-2. **Create a virtual environment (optional but recommended)**:
+2. **Create and activate a virtual environment**:
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   python -m venv backend
+   source backend/bin/activate        # On Windows: backend\Scripts\activate
    ```
 
-3. **Install required dependencies**:
+3. **Install dependencies**:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Prepare your dataset**:
-   - Download or collect sequences of sign language gestures.
-   - Place them in the `Data/` directory with each action sequence in its respective folder.
+4. **Run the Flask server**:
+   ```bash
+   cd backend
+   python app.py
+   ```
 
-### **Running the Model**
+   The API will be available at `http://localhost:5000`.
 
-To train the model:
+### Frontend Setup
 
-```bash
-python main.py
-```
+1. **Navigate to the Flutter project**:
+   ```bash
+   cd frontend
+   ```
 
-### **GPU Acceleration**
+2. **Install Flutter dependencies**:
+   ```bash
+   flutter pub get
+   ```
 
-If a CUDA-compatible GPU is available, the model will automatically use it for training and inference. Ensure you have installed the appropriate versions of PyTorch and CUDA to support GPU execution.
-
-### **Evaluating the Model**
-
-After training, the model will evaluate the performance on the test set. The confusion matrix and probabilities for each class will be printed and visualized.
-
----
-
-# **Project Workflow**
-
-1. **Data Loading**: Load gesture sequences for each action (e.g., hello, thanks, etc.).
-2. **Model Training**: Train the LSTM model to classify these sequences into the appropriate actions.
-3. **Evaluation**: Test the trained model and generate a confusion matrix to assess its performance.
+3. **Run the app** (with a connected device or emulator):
+   ```bash
+   flutter run
+   ```
 
 ---
 
-# **Contributors**
-<a href="https://github.com/Uni-Creator/Real-Time-Sign-Language-Recognition/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Uni-Creator/Real-Time-Sign-Language-Recognition" />
+## GPU Acceleration
+
+If a CUDA-compatible GPU is available, the model will automatically use it for inference. Ensure the appropriate versions of PyTorch and CUDA drivers are installed.
+
+---
+
+## API Overview
+
+The Flask backend exposes:
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/predict` | `POST` | Accepts a video frame sequence and returns a gesture label |
+| `/ws` | WebSocket | Real-time streaming inference |
+
+---
+
+## Project Workflow
+
+1. **Capture** — The Flutter app streams live camera frames to the backend.
+2. **Preprocess** — MediaPipe extracts hand landmarks; OpenCV handles frame normalization.
+3. **Inference** — The Swin3D + BiLSTM model classifies the gesture sequence.
+4. **Display** — The recognized ISL sign is shown on-screen and optionally spoken via TTS.
+
+---
+
+## Contributors
+
+<a href="https://github.com/Uni-Creator/signSight/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Uni-Creator/signSight" />
 </a>
 
+---
 
-## **Contributing**
+## Contributing
 
-Contributions are welcome! If you want to contribute to this project, please follow these steps:
+Contributions are welcome! To contribute:
 
 1. Fork the repository.
 2. Create a new branch for your feature or bug fix.
@@ -120,17 +159,14 @@ Contributions are welcome! If you want to contribute to this project, please fol
 4. Push to the branch.
 5. Open a pull request.
 
+---
+
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.
 
 ---
 
-# **License**
+## Contact
 
-This project is licensed under the MIT License. See the `LICENSE` file for more details.
-
----
-
-# **Contact**
-
-For any questions or inquiries about this project, please feel free to reach out at [uni.creator001@gmail.com](mailto:uni.creator001@gmail.com).
-
----
+For questions or inquiries, reach out at [abhayr24564@gmail.com](mailto:abhayr24564@gmail.com).
