@@ -1,0 +1,44 @@
+name: SignSight
+description: "SignSight - Real-time Sign Language Translation App"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  flutter_screenutil: ^5.9.3
+
+  # Camera
+  camera: ^0.11.0+2
+  
+  # Networking
+  http: ^1.2.1
+  web_socket_channel: ^3.0.1
+  connectivity_plus: ^6.0.0
+  
+  # Permissions
+  permission_handler: ^11.3.1
+  
+  # State management
+  provider: ^6.1.2
+  
+  # Utilities
+  intl: ^0.19.0
+  flutter_tts: ^4.0.2
+  shared_preferences: ^2.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
