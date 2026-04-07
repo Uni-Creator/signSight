@@ -6,6 +6,13 @@ A real-time Indian Sign Language (ISL) recognition system powered by a Swin3D + 
 
 ---
 
+## Demo
+
+
+https://github.com/user-attachments/assets/033be0e1-8f8f-44bf-a7c8-7467317de273
+
+
+
 ## Description
 
 **signSight** is an end-to-end ISL recognition system that processes video input, extracts spatial-temporal features, and classifies sign gestures in real time. The system is designed for accessibility — enabling communication for the hearing-impaired by translating ISL gestures into readable text, with optional text-to-speech output on the mobile frontend.
