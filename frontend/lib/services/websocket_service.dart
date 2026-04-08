@@ -9,7 +9,7 @@ typedef OnConnectionCallback = void Function(bool connected);
 
 class WebSocketService {
   // Change to your server IP. For Android emulator: ws://10.0.2.2:5000/ws
-  static const String wsUrl = 'ws://10.223.157.13:5000/ws';
+  static const String wsUrl = 'ws://10.62.125.13:5000/ws';
 
   WebSocketChannel? _channel;
   bool _isConnected = false;
@@ -67,6 +67,12 @@ class WebSocketService {
     if (!_isConnected || _channel == null) return;
     final base64Frame = base64Encode(jpegBytes);
     _channel!.sink.add(jsonEncode({'frame': base64Frame}));
+  }
+
+  /// Change inference mode (frames, video, hybrid)
+  void sendConfig(String mode) {
+    if (!_isConnected || _channel == null) return;
+    _channel!.sink.add(jsonEncode({'type': 'config', 'mode': mode}));
   }
 
   Future<void> disconnect() async {

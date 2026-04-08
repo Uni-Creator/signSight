@@ -5,6 +5,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:provider/provider.dart';
+import 'package:image/image.dart' as img;
 
 import '../providers/auth_provider.dart';
 import '../providers/translation_provider.dart';
@@ -32,6 +33,13 @@ class _TranslateScreenState extends State<TranslateScreen>
   String _statusMessage = 'Camera not started';
   double _confidence = 0;
   Timer? _frameTimer;
+
+  // Inference Configuration
+  String _inferenceMode = 'hybrid'; // frames, video, hybrid
+
+  // Frame Throttling
+  DateTime? _lastFrameTime;
+  static const int FRAME_INTERVAL_MS = 80; // ~12 FPS
 
   // static const primaryColor = Color(0xFF2B2D5D);
   // static const accentColor = Color(0xFF4B6CF7);
@@ -116,30 +124,94 @@ class _TranslateScreenState extends State<TranslateScreen>
   }
 
   Future<void> _startStreaming() async {
-    if (!_cameraInitialized) return;
-
     setState(() {
       _isStreaming = true;
       _statusMessage = 'Streaming to server...';
     });
 
-    // Send frames every 200ms (5 fps to server)
-    _frameTimer = Timer.periodic(const Duration(milliseconds: 200), (_) async {
-      if (!_isStreaming ||
-          _cameraController == null ||
-          !_cameraController!.value.isInitialized) return;
+    _cameraController?.startImageStream((CameraImage image) async {
+      if (!_isStreaming || !_wsService.isConnected) return;
+
+      final now = DateTime.now();
+      if (_lastFrameTime != null && 
+          now.difference(_lastFrameTime!).inMilliseconds < FRAME_INTERVAL_MS) {
+        return;
+      }
+      _lastFrameTime = now;
 
       try {
-        final file = await _cameraController!.takePicture();
-        final bytes = await file.readAsBytes();
-        _wsService.sendFrame(Uint8List.fromList(bytes));
-      } catch (_) {}
+        final jpegBytes = await _convertToPredictableJpeg(image);
+        if (jpegBytes != null) {
+          _wsService.sendFrame(jpegBytes);
+        }
+      } catch (e) {
+        debugPrint('Frame stream error: $e');
+      }
     });
   }
 
+
+  Future<Uint8List?> _convertToPredictableJpeg(CameraImage image) async {
+    try {
+      // Manual conversion and resize to 224x224 (checklist mandatory)
+      final dartImg = _convertCameraImage(image);
+      if (dartImg == null) return null;
+
+      final resized = img.copyResize(dartImg, width: 224, height: 224);
+      return Uint8List.fromList(img.encodeJpg(resized, quality: 85));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  img.Image? _convertCameraImage(CameraImage image) {
+    try {
+      final int width = image.width;
+      final int height = image.height;
+      final img.Image res = img.Image(width: width, height: height);
+
+      // Simple YUV420 to RGB conversion (fast enough for 224x224)
+      if (image.format.group == ImageFormatGroup.yuv420) {
+        final Plane yPlane = image.planes[0];
+        final Plane uPlane = image.planes[1];
+        final Plane vPlane = image.planes[2];
+
+        for (int y = 0; y < height; y++) {
+          for (int x = 0; x < width; x++) {
+            final int yPos = y * yPlane.bytesPerRow + x;
+            final int uvPos = (y >> 1) * uPlane.bytesPerRow + (x >> 1);
+
+            final int yp = yPlane.bytes[yPos];
+            final int up = uPlane.bytes[uvPos];
+            final int vp = vPlane.bytes[uvPos];
+
+            // Standard YUV to RGB
+            int r = (yp + 1.402 * (vp - 128)).round().clamp(0, 255);
+            int g = (yp - 0.344136 * (up - 128) - 0.714136 * (vp - 128)).round().clamp(0, 255);
+            int b = (yp + 1.772 * (up - 128)).round().clamp(0, 255);
+
+            res.setPixelRgb(x, y, r, g, b);
+          }
+        }
+        return res;
+      } else if (image.format.group == ImageFormatGroup.bgra8888) {
+        // iOS / Some Androids
+        return img.Image.fromBytes(
+          width: width,
+          height: height,
+          bytes: image.planes[0].bytes.buffer,
+          format: img.Format.uint8,
+          numChannels: 4,
+        );
+      }
+    } catch (e) {
+      debugPrint('Conversion error: $e');
+    }
+    return null;
+  }
+
   Future<void> _stopStreaming() async {
-    _frameTimer?.cancel();
-    _frameTimer = null;
+    await _cameraController?.stopImageStream();
     setState(() {
       _isStreaming = false;
       _statusMessage = 'Stopped. Tap Start to resume.';
@@ -170,11 +242,31 @@ class _TranslateScreenState extends State<TranslateScreen>
   }
 
   void _switchCamera() async {
-    if (_cameras.length < 2) return;
-    await _stopStreaming();
+    if (_cameras.length < 2 || _cameraController == null) return;
+    
+    final bool wasStreaming = _isStreaming;
+    
+    // Stop and UI feedback
+    if (wasStreaming) await _stopStreaming();
+    
+    setState(() {
+      _cameraInitialized = false;
+      _statusMessage = 'Switching camera...';
+    });
+
+    // Cycle index
     _selectedCamera = (_selectedCamera + 1) % _cameras.length;
+
+    // Dispose and Re-init
+    await _cameraController?.dispose();
+    _cameraController = null;
+    
     await _initCamera(_cameras[_selectedCamera]);
-    if (_isStreaming) await _startStreaming();
+    
+    // Resume streaming if needed
+    if (wasStreaming && _cameraInitialized) {
+      await _startStreaming();
+    }
   }
 
   @override
@@ -327,6 +419,44 @@ class _TranslateScreenState extends State<TranslateScreen>
                               color: Colors.white, fontSize: 11),
                         ),
                       ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Inference Mode Toggle
+                  GestureDetector(
+                    onTap: () {
+                      final modes = ['frames', 'video', 'hybrid'];
+                      final next = modes[(modes.indexOf(_inferenceMode) + 1) % modes.length];
+                      setState(() => _inferenceMode = next);
+                      _wsService.sendConfig(next);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Mode: ${next.toUpperCase()}'),
+                          duration: const Duration(milliseconds: 500),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.blueAccent.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.blueAccent.withOpacity(0.5)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _inferenceMode == 'frames' ? Icons.bolt : 
+                            _inferenceMode == 'video' ? Icons.movie : Icons.auto_awesome,
+                            color: Colors.blueAccent, size: 14,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _inferenceMode.toUpperCase(),
+                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),

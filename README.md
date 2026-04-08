@@ -1,61 +1,177 @@
 # signSight
 
-![GitHub Repo stars](https://img.shields.io/github/stars/Uni-Creator/signSight?style=social) ![GitHub forks](https://img.shields.io/github/forks/Uni-Creator/signSight?style=social)
+![GitHub Repo stars](https://img.shields.io/github/stars/Uni-Creator/signSight?style=social)
+![GitHub forks](https://img.shields.io/github/forks/Uni-Creator/signSight?style=social)
+![Accuracy](https://img.shields.io/badge/Top--1%20Accuracy-66.84%25-blue)
+![Classes](https://img.shields.io/badge/ISL%20Classes-76-green)
+![Model](https://img.shields.io/badge/Backbone-Swin3D--S-orange)
 
-A real-time Indian Sign Language (ISL) recognition system powered by a Swin3D + BiLSTM deep learning pipeline, served via a Flask API and paired with a Flutter mobile app. 🖐️
-
----
-
-## Description
-
-**signSight** is an end-to-end ISL recognition system that processes video input, extracts spatial-temporal features, and classifies sign gestures in real time. The system is designed for accessibility — enabling communication for the hearing-impaired by translating ISL gestures into readable text, with optional text-to-speech output on the mobile frontend.
-
-### Project Overview
-
-The pipeline is organized into three layers:
-
-1. **Model** (`model/`): A Swin3D-S backbone combined with a BiLSTM head processes sequences of video frames to extract and classify ISL gestures. Model checkpoints and training datasets are stored here.
-
-2. **Backend** (`backend/`): A Flask server exposes a REST/WebSocket API (using `flask-sock`) for real-time inference. It uses MediaPipe for hand landmark extraction, OpenCV for frame capture and preprocessing, and PyTorch + JAX for model inference.
-
-3. **Frontend** (`frontend/`): A Flutter Android/iOS app that streams camera input to the backend, displays recognized gestures in real time, and reads them aloud via `flutter_tts`.
+A real-time Indian Sign Language (ISL) recognition system powered by a fine-tuned **Swin3D-S** deep learning model, served via a **FastAPI** backend and paired with a **Flutter** mobile app with live translation and sentence building. 
 
 ---
 
-## Technologies Used
+## Demo
 
-- **Python 3.10** — Backend, model training, and inference
-- **PyTorch / JAX** — Model training and inference
-- **Swin3D + BiLSTM** — Spatial-temporal feature extraction and sequence modeling
-- **MediaPipe** — Hand landmark detection
-- **OpenCV** — Frame capture and preprocessing
-- **Flask + flask-sock** — REST and WebSocket API server
-- **Flutter (Dart)** — Cross-platform mobile frontend
-- **firebase / Pyrebase4** — Authentication and data sync
-- **NumPy / SciPy / Matplotlib** — Data processing and visualization
+https://github.com/user-attachments/assets/033be0e1-8f8f-44bf-a7c8-7467317de273
+
+---
+
+## Results
+
+| Metric | Value |
+|---|---|
+| Top-1 Accuracy | **66.84%** |
+| Macro F1 | 0.638 |
+| Weighted F1 | 0.648 |
+| Classes | 76 ISL words |
+| Test Samples | 187 |
+| Random Baseline | 1.3% |
+
+---
+
+## Model Architecture
+
+### Backbone: Swin3D-S (Video Swin Transformer Small)
+
+The model uses a **Swin3D-S** backbone pretrained on **Kinetics-400** for spatiotemporal feature extraction from video clips.
+
+```
+Input Video (3 × 16 × 224 × 224)
+        ↓
+Patch Embedding (Conv3D, 96 channels)
+        ↓
+Swin Transformer Blocks (4 stages)
+  Stage 1: 2 blocks, dim=96,  resolution=8×56×56
+  Stage 2: 2 blocks, dim=192, resolution=8×28×28
+  Stage 3: 18 blocks, dim=384, resolution=8×14×14
+  Stage 4: 2 blocks, dim=768, resolution=8×7×7
+        ↓
+Adaptive Average Pooling → 768-dim feature vector
+        ↓
+Linear Classification Head (768 → 76 classes)
+```
+
+**Total Parameters:** 33,112,492  
+**Trainable Parameters:** 9,510,988 (Stage 3 + Stage 4 + Norm + Head unfrozen)  
+**Model Size:** ~126 MB
+
+### Fine-tuning Strategy
+
+- Frozen: Stages 1, 2 and patch embedding
+- Unfrozen: `features[6]` (full Stage 3), `norm` layer, classification head
+- Loss: CrossEntropyLoss
+- Optimizer: AdamW (lr=1e-4)
+- Scheduler: ReduceLROnPlateau (factor=0.5, patience=5)
+- Mixed Precision: fp16 via `torch.cuda.amp.GradScaler`
+- Early Stopping: patience=5
+
+---
+
+## Dataset
+
+**Source:** [Indian Sign Language Words with Landmarks](https://www.kaggle.com/datasets/kaushikyh/indian-sign-language-words-with-landmarks) (Kaggle)
+
+| Split | Samples |
+|---|---|
+| Train | 745 |
+| Validation | 234 |
+| Test | 187 |
+| **Total** | **1,166** |
+
+**76 ISL word classes:**
+`afternoon, animal, bad, beautiful, big, bird, blind, cat, cheap, clothing, cold, cow, curved, deaf, dog, dress, dry, evening, expensive, famous, fast, female, fish, flat, friday, good, happy, hat, healthy, horse, hot, hour, light, long, loose, loud, minute, monday, month, morning, mouse, narrow, new, night, old, pant, pocket, quiet, sad, saturday, second, shirt, shoes, short, sick, skirt, slow, small, suit, sunday, t_shirt, tall, thursday, time, today, tomorrow, tuesday, ugly, warm, wednesday, week, wet, wide, year, yesterday, young`
+
+**Video format:** `.MOV`, variable length, processed to 16 frames at 224×224  
+**Preprocessing:** Center crop, rescale (1/255), normalize (mean=0.5, std=0.5)  
+**Augmentation (train only):** RandomPerspective, ColorJitter
+
+---
+
+## Training
+
+**Platform:** Kaggle Notebooks  
+**Hardware:** NVIDIA Tesla T4 (15GB VRAM)  
+**Framework:** PyTorch 2.10.0+cu128  
+
+**Training config:**
+```python
+BATCH_SIZE  = 32
+CLIP_LENGTH = 16       # frames per video
+CLIP_SIZE   = 224      # spatial resolution
+EPOCHS      = 1000     # with early stopping
+LR          = 0.0001
+PATIENCE    = 5        # early stopping
+SEED        = 42
+```
+
+**Training time:** ~3.5 minutes/epoch × ~15 epochs ≈ ~1 hour total
+
+**Pretrained weights:** `Swin3D_S_Weights.KINETICS400_V1` (torchvision)
+
+**Model hosted at:** [huggingface.co/Creator-090/isl-swin3d-model](https://huggingface.co/Creator-090/isl-swin3d-model)
 
 ---
 
 ## Project Structure
 
-```plaintext
+```
 .
-├── backend/                        # Flask API server + Python environment
-│   ├── saved_captures/             # Saved gesture video captures
-│   └── Lib/site-packages/          # Virtual environment dependencies
+├── api/                        # FastAPI inference server (HF Space)
+│   ├── app.py                  # REST endpoints (/predict, /health, /health/deep)
+│   ├── model.py                # Swin3D model + preprocessing + inference
+│   ├── requirements.txt        # Dependencies for deployment
+│   └── Dockerfile              # Container config for HF Spaces
 │
-├── frontend/                       # Flutter mobile application
+├── backend/                   # Flask + WebSocket server (real-time system layer)
+│   ├── saved_captures/        # Temporary video clips generated from frame buffers
+│   ├── authentication.py      # Firebase auth (register/login users)
+│   ├── history.py             # Store & retrieve translation history (DB layer)
+│   ├── main.py                # Core server (REST + WebSocket, frame processing, pipeline orchestration)
+│   ├── model.py               # Client wrapper for FastAPI (sends video → gets prediction)
+│   ├── requirements.txt       # Backend dependencies (Flask, mediapipe, etc.)
+│   ├── hand_landmarker.task   # MediaPipe hand landmark model
+│   ├── pose_landmarker_full.task  # MediaPipe pose landmark model
+│
+├── frontend/                  # Flutter mobile app (client)
 │   ├── lib/
-│   │   ├── providers/              # State management
-│   │   ├── screens/                # UI screens
-│   │   └── services/               # API communication services
-│   ├── assets/                     # Static assets (icons, images)
-│   ├── android/                    # Android build configuration
-│   └── ios/                        # iOS build configuration
+│   │   ├── providers/         # State management (app state, predictions, UI sync)
+│   │   ├── screens/           # UI screens (e.g., LiveTranslationScreen)
+│   │   └── services/          # API + WebSocket communication, sentence builder logic
+│   ├── assets/                # Static assets (icons, images)
+│   ├── android/               # Android-specific config
+│   └── ios/                   # iOS-specific config
 │
-└── model/
-    ├── checkpoints/                # Saved model weights
-    └── dataset/                    # ISL gesture training data
+└── model/                     # Training + experimentation
+    ├── is76words.ipynb        # Kaggle notebook (training pipeline)
+    ├── checkpoints/           # Saved trained weights (.pt files)
+    ├── swin_small_ISL_gpu.py  # Model architecture & training script
+    └── dataset/               # ISL gesture dataset
+```
+
+---
+
+## API
+
+The FastAPI backend exposes:
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/` | GET | Health check |
+| `/health` | GET | Model load status |
+| `/health/deep` | GET | Verifies inference works |
+| `/predict` | POST | Single video clip → predicted sign |
+
+**Live prediction response:**
+```json
+{
+  "prediction": "happy",
+  "confidence": 84.21,
+  "top_k": [
+    {"class": "happy", "confidence": 84.21},
+    {"class": "good",  "confidence": 9.43}
+  ],
+  "inference_time_ms": 312.5
+}
 ```
 
 ---
@@ -64,80 +180,81 @@ The pipeline is organized into three layers:
 
 ### Prerequisites
 
-- Python 3.10
-- Flutter SDK (≥ 3.x)
-- Android Studio or Xcode (for mobile deployment)
-- CUDA-compatible GPU (recommended for training)
+- Python 3.10+
+- Flutter SDK ≥ 3.x
+- Android Studio or Xcode
 
 ### Backend Setup
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/Uni-Creator/signSight.git
-   cd signSight
-   ```
+```bash
+git clone https://github.com/Uni-Creator/signSight.git
+cd signSight
 
-2. **Create and activate a virtual environment**:
-   ```bash
-   python -m venv backend
-   source backend/bin/activate        # On Windows: backend\Scripts\activate
-   ```
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+pip install -r backend/requirements.txt
 
-4. **Run the Flask server**:
-   ```bash
-   cd backend
-   python app.py
-   ```
-
-   The API will be available at `http://localhost:5000`.
+cd backend
+python app.py
+# API available at http://localhost:5000
+```
 
 ### Frontend Setup
 
-1. **Navigate to the Flutter project**:
-   ```bash
-   cd frontend
-   ```
+```bash
+cd frontend
+flutter pub get
+flutter run
+```
 
-2. **Install Flutter dependencies**:
-   ```bash
-   flutter pub get
-   ```
+### Flutter API Config
 
-3. **Run the app** (with a connected device or emulator):
-   ```bash
-   flutter run
-   ```
-
----
-
-## GPU Acceleration
-
-If a CUDA-compatible GPU is available, the model will automatically use it for inference. Ensure the appropriate versions of PyTorch and CUDA drivers are installed.
+Update the API URL in `frontend/lib/services/`:
+```dart
+static const String API_URL = "https://creator-090-isl-api.hf.space";
+// or for local: "http://YOUR_LOCAL_IP:7860"
+```
 
 ---
 
-## API Overview
+## Technologies Used
 
-The Flask backend exposes:
-
-| Endpoint | Method | Description |
-|---|---|---|
-| `/predict` | `POST` | Accepts a video frame sequence and returns a gesture label |
-| `/ws` | WebSocket | Real-time streaming inference |
+| Layer | Technology |
+|---|---|
+| Model backbone | Swin3D-S (torchvision) |
+| Pretraining | Kinetics-400 |
+| Training framework | PyTorch 2.10 + CUDA 12.8 |
+| Mixed precision | torch.cuda.amp (fp16) |
+| Video preprocessing | Decord + VivitImageProcessor |
+| Backend API | FastAPI + Uvicorn |
+| Model hosting | Hugging Face Hub |
+| Mobile frontend | Flutter (Dart) |
+| Auth & sync | Firebase / Pyrebase4 |
+| Text-to-speech | flutter_tts |
+| Data augmentation | torchvision v2 transforms |
 
 ---
 
-## Project Workflow
+## Live Translation Pipeline
 
-1. **Capture** — The Flutter app streams live camera frames to the backend.
-2. **Preprocess** — MediaPipe extracts hand landmarks; OpenCV handles frame normalization.
-3. **Inference** — The Swin3D + BiLSTM model classifies the gesture sequence.
-4. **Display** — The recognized ISL sign is shown on-screen and optionally spoken via TTS.
+```
+Phone Camera
+    ↓ (2-sec clips)
+Flutter App (LiveISLTranslator)
+    ↓ (multipart/form-data POST)
+FastAPI /predict
+    ↓
+Swin3D-S Inference (fp16, CPU on HF Spaces)
+    ↓
+Smoothing (majority vote over last 3 predictions)
+    ↓
+SentenceBuilder (confirm word after 2x detection)
+    ↓
+Display + TTS
+```
+
+**Latency (HF Spaces free tier):** ~4–6 sec/clip (CPU inference)
 
 ---
 
@@ -151,22 +268,20 @@ The Flask backend exposes:
 
 ## Contributing
 
-Contributions are welcome! To contribute:
-
-1. Fork the repository.
-2. Create a new branch for your feature or bug fix.
-3. Commit your changes.
-4. Push to the branch.
-5. Open a pull request.
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push and open a pull request
 
 ---
 
 ## License
 
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+MIT License. See `LICENSE` for details.
 
 ---
 
 ## Contact
 
-For questions or inquiries, reach out at [abhayr24564@gmail.com](mailto:abhayr24564@gmail.com).
+**Abhay**: [abhayr24564@gmail.com](mailto:abhayr24564@gmail.com)  
+GitHub: [@Uni-Creator](https://github.com/Uni-Creator)

@@ -176,6 +176,9 @@ def websocket_translate(ws):
     logger.info("WebSocket client connected")
     ws.send(json.dumps({"status": "connected", "message": "Ready for frames"}))
 
+    # Dynamic Config
+    config = {"mode": "hybrid"}
+    
     frame_buffer = deque(maxlen=CLIP_LENGTH)
     last_receive_time = time.monotonic()
     last_prediction_future = None
@@ -186,9 +189,7 @@ def websocket_translate(ws):
     try:
         if mp_drawing: # MediaPipe successfully imported
             pose_base_options = mp_python.BaseOptions(model_asset_path='pose_landmarker_full.task')
-            pose_options = mp_vision.PoseLandmarkerOptions(
-                base_options=pose_base_options
-            )
+            pose_options = mp_vision.PoseLandmarkerOptions(base_options=pose_base_options)
             pose_detector = mp_vision.PoseLandmarker.create_from_options(pose_options)
 
             hand_base_options = mp_python.BaseOptions(model_asset_path='hand_landmarker.task')
@@ -199,11 +200,31 @@ def websocket_translate(ws):
             hand_detector = mp_vision.HandLandmarker.create_from_options(hand_options)
     except Exception as e:
         logger.error(f"Failed to load Landmarkers: {e}")
+
+    # Initial Health Check
+    if not model_api.check_health():
+        logger.warning("Remote model API is not ready. Predictions may fail.")
+    else:
+        logger.info("Remote model API is healthy.")
+
     try:
         while True:
             message = ws.receive(timeout=30)
             if not message:
                 break
+
+            # Handle commands
+            try:
+                data = json.loads(message)
+                if data.get("type") == "config":
+                    new_mode = data.get("mode")
+                    if new_mode in ["frames", "video", "hybrid"]:
+                        config["mode"] = new_mode
+                        ws.send(json.dumps({"status": "config_updated", "mode": new_mode}))
+                        logger.info(f"Switching inference mode to: {new_mode}")
+                        continue
+            except:
+                pass
 
             now = time.monotonic()
             if now - last_receive_time < FRAME_DELAY:
@@ -245,7 +266,6 @@ def websocket_translate(ws):
             if last_prediction_future is not None and last_prediction_future.done():
                 try:
                     result = last_prediction_future.result()
-                    print(result)
                     if "error" in result:
                         logger.error(f"API Error: {result['error']}")
                     else:
@@ -254,20 +274,17 @@ def websocket_translate(ws):
                         
                         hf_inference = result.get('inference_time_ms', 0.0)
                         total_predict = result.get('total_latency_ms', 0.0)
-                        print(f"[Latencies] Async Predict Task: {total_predict:.1f}ms (HF API time: {hf_inference:.1f}ms)")
-                        
+                        print(f"[TOTAL Latencies] {config['mode'].upper()} Predict Task: {total_predict:.1f}ms (HF API time: {hf_inference:.1f}ms)")
+                        print(f"Detected: {label} ({conf:.0%})")
                         try:
                             conf = float(conf)
                         except ValueError:
                             conf = 0.0
 
                         if label and conf > 0.4:
-                            print({"label": label, "confidence": conf})
                             ws.send(json.dumps({"label": label, "confidence": conf}))
-                            logger.debug(f"Detected: {label} ({conf:.0%})")
-                            # Clear buffer after successful prediction to act as a cool-down 
-                            # and prevent instantly repeatedly triggering on the same sign
-                            frame_buffer.clear()
+                            logger.info(f"Detected: {label} ({conf:.0%})")
+                            frame_buffer.clear() 
                 except Exception as e:
                     logger.error(f"Background prediction failed: {e}")
                 
@@ -275,16 +292,26 @@ def websocket_translate(ws):
 
             # Dispatch new prediction if buffer is full and executor is free
             if len(frame_buffer) == CLIP_LENGTH and last_prediction_future is None:
-                print("Analyzing the gesture asynchronously...")
                 frames_copy = list(frame_buffer)
                 
-                def predict_with_latency(frames):
+                def predict_with_latency(frames, selected_mode):
                     start_t = time.time()
-                    res = model_api.predict_from_frames(frames)
+                    
+                    if selected_mode == "frames":
+                        res = model_api.predict_from_frames(frames)
+                    elif selected_mode == "video":
+                        res = model_api.predict(frames)
+                    else:
+                        # Hybrid logic
+                        res = model_api.predict_from_frames(frames)
+                        if "error" in res:
+                            logger.warning(f"Hybrid: Fast inference failed. Falling back to video.")
+                            res = model_api.predict(frames)
+                    
                     res['total_latency_ms'] = (time.time() - start_t) * 1000
                     return res
                 
-                last_prediction_future = executor.submit(predict_with_latency, frames_copy)
+                last_prediction_future = executor.submit(predict_with_latency, frames_copy, config["mode"])
 
     except Exception as e:
         logger.warning(f"WebSocket closed: {e}")
