@@ -14,12 +14,6 @@ A real-time Indian Sign Language (ISL) recognition system powered by a fine-tune
 
 https://github.com/user-attachments/assets/033be0e1-8f8f-44bf-a7c8-7467317de273
 
-
-
-## Description
-
-https://github.com/user-attachments/assets/033be0e1-8f8f-44bf-a7c8-7467317de273
-
 ---
 
 ## Results
