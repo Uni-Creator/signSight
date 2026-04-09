@@ -11,16 +11,12 @@ A real-time Indian Sign Language (ISL) recognition system powered by a fine-tune
 ---
 
 ## Demo
-<<<<<<< HEAD
-=======
-
 
 https://github.com/user-attachments/assets/033be0e1-8f8f-44bf-a7c8-7467317de273
 
 
 
 ## Description
->>>>>>> 706077e9ea1edce514ac7ac4e2c29be1ecadfe10
 
 https://github.com/user-attachments/assets/033be0e1-8f8f-44bf-a7c8-7467317de273
 
